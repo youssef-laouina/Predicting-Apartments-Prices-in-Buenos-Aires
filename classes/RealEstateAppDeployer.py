@@ -13,7 +13,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Configure caching
-cache = Cache(config={'CACHE_TYPE': 'SimpleCache', 'CACHE_DEFAULT_TIMEOUT': 300})
+cache = Cache(config={'CACHE_TYPE': 'SimpleCache', 'CACHE_DEFAULT_TIMEOUT': 60})
 
 
 class CoordinateConverter:
@@ -33,20 +33,23 @@ class CoordinateConverter:
 class RealEstateApp:
     def __init__(self, df_full, model, scaler):
         self.app = Dash(__name__)
-        cache.init_app(self.app.server)  # type: ignore  # Initialize cache with the Flask server
-
         self.converter = CoordinateConverter()
-        self.layout = self.build_layout()
-        self.configure_callbacks()
         self.df_full = df_full
         self.model = model
         self.scaler = scaler
 
+        self.app.layout = self.build_layout()
+        self.configure_callbacks()
+        
+        cache.init_app(self.app.server)  # type: ignore  # Initialize cache with the Flask server
+
     def build_layout(self):
-        eventHandlers = dict(
+        # Define event handlers
+        eventHandlers = dict( 
             click=assign("function(e, ctx){ctx.setProps({data: {lat: e.latlng.lat, lng: e.latlng.lng}})}")
         )
 
+        # Build layout
         layout = html.Div([
             dcc.Store(id='address_cache'),  # Store for caching addresses
             dcc.Store(id='prediction_cache'),  # Store for caching predictions
@@ -173,7 +176,7 @@ class RealEstateApp:
 
     def update_coordinates(self, data):
         if data:
-            return data['lat'], data['lng'], f"Coordinates: Latitude {data['lat']:.4f}, Longitude {data['lng']:.4f}", [data['lat'], data['lng']]
+            return data['lat'], data['lng'], f"Coordinates: Latitude {data['lat']:.6f}, Longitude {data['lng']:.6f}", [data['lat'], data['lng']]
         return None, None, "Click on the map to select coordinates", [33.6086, -7.6327]
 
     def update_address(self, n_clicks, lat, lon):
@@ -252,9 +255,7 @@ class RealEstateApp:
                 municipality_df['Measure'] = ['Average Price (USD)', 'Price Standard Deviation (USD)', 'Minimum Price (USD)', '25th Percentile Price (USD)', 
                                         'Median Price (USD)', '75th Percentile Price (USD)','Maximum Price (USD)']
 
-                # Return the table
-                # return f"{municipality_df.Value[0]}" 
-            
+                # Return the table            
                 return municipality_name, dash_table.DataTable(
                     municipality_df.to_dict('records'),[{'name': 'Measure', 'id': 'Measure'}, {'name': 'Value', 'id': 'Value'}],
                     style_cell={'textAlign': 'left', 'font-family': 'Calibri', 'padding': '10px', 'border': '1px solid #17616E'},
@@ -265,5 +266,4 @@ class RealEstateApp:
         return '', html.Div('')
 
     def run(self):
-        self.app.layout = self.layout
         self.app.run_server(debug=True)
